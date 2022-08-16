@@ -4,7 +4,7 @@ from datetime import datetime
 cars = {}
 
 class Car:
-  def __init__(self, plate, size, timeIn=None, timeOut=None, spot=None, spotSize=None, runningTotal=None):
+  def __init__(self, plate, size, timeIn=None, timeOut=None, spot=None, spotSize=None, runningTotal=None, parkedFor=0):
     self.plate = plate                  # unique identifier, plate number
     self.size = size                    # size of car
     self.timeIn = timeIn                # last timed in
@@ -12,6 +12,7 @@ class Car:
     self.spot = spot                    # current spot occupied
     self.spotSize = spotSize            # size of current spot occupied
     self.runningTotal = runningTotal    # running total of fee (for computation of returning parker)
+    self.parkedFor = parkedFor          # counts the current parking hours of the Car
 
     print("Created car with plate (" + plate + ") of size " + size)
     print("Current Cars: ")
@@ -67,15 +68,17 @@ def park(Car, entrance, time):
   print()
   print(Car.plate + " entering from entrance " + str(entrance) + "...")
 
-  # Check parking time in, if recently left within 1 hr
-  if(Car.timeOut is None):
+  # Check parking time in
+  if(Car.timeOut is None or ((time - Car.timeOut).total_seconds()/3600 > 60)):    # First parking or time between parkings exceeds 1 hour
     print(" - New Parking, time: " + str(time))
     Car.runningTotal = 0    # reset running total, no longer continues previous parking
+    Car.parkedFor = 0       # reset parking hours, start fresh
     Car.timeIn = time
-  elif((time - Car.timeOut).total_seconds()/3600 <= 60):   # Time since last timeout is less than an hour, modify this later
-  
+  #elif((time - Car.timeOut).total_seconds()/3600 <= 60):   # Time since last timeout is less than an hour, continuous rating
+  else:
     print(" - HAS PARKED in past 1hr, prev timeIn: " + str(Car.timeIn))
-    Car.timeOut = None      # reset timeOut, continue from last timeIn
+    #Car.timeOut = None      # reset timeOut, continue from last timeIn
+    #Car.contRate = True      # For usage by unpark()
 
   availableSpot = locateSpot(Car.size, entrance)
 
@@ -87,8 +90,7 @@ def park(Car, entrance, time):
 
 
 def getExceedingFee(excessTime, size):
-  print("Exceeded 3 hrs by: " + str(excessTime))
-  print("excessTime type: " + str(type(excessTime)))
+  print("Excess Hours: " + str(excessTime))
   excessTime = round(excessTime)
   fee = 0
   match size:
@@ -117,32 +119,46 @@ def unpark(Car, time):
   print("New available spot: " + str(Car.spot))
   available.insert(0,int(Car.spot))
 
-  fee = 40
-  if(duration > 3 and duration < 24):
-    #compute for exceeding
-    additional = getExceedingFee(duration-3,Car.spotSize)
+  # if under continuous rated parking
+  if(Car.parkedFor > 0):
+    duration = (time - Car.timeOut).total_seconds()/3600    # Checking from current time to previous timeout, since continuous rating
+    totalHrs = (Car.parkedFor + duration)
 
-    fee += additional
-    print("Additional Rate: " + str(additional) + ". Charging for rate of: " + Car.spotSize)
+    if(totalHrs % 24 == 0):      # somehow exactly on multiple of 24
+      Car.runningTotal = 5000 * totalHrs/24 
+      print("Exactly " + str(totalHrs/24) + " days! = " + str(Car.runningTotal))
+
+    elif(surpassed24(Car.parkedFor, totalHrs)):   # went beyond a 24hr chunk during continuous rating
+      chunk = nearest24(Car.parkedFor)    # get nearest 24-hour chunk
+      duration -= totalHrs - chunk  # get remaining duration beyond the 24 hr chunk, this is subject to cont rate
+      Car.runningTotal = (5000*chunk/24) + getExceedingFee(duration, Car.spotSize)  # recompute new 5000 peso chunks, plus the exceeding
+
+    else:
+      contFee = getExceedingFee(duration, Car.spotSize)       # Regular continuous fee
+      Car.runningTotal += contFee 
     
-  elif(duration >= 24):
-    #compute for overnight fee
-    duration -= 3 # initial 3 hours
-    exceedFee = math.floor(duration/24)*5000
-    remainderFee = getExceedingFee(duration % 24,Car.spotSize)
+    Car.parkedFor = totalHrs
+    #return Car.runningTotal
 
-    fee += exceedFee + remainderFee
-    print("Overnight. Total: " + str(exceedFee) + " + " + str(remainderFee) + " = " + str(fee));
-  else:
-    fee = 40
-  
+  else:     #First parking, compute normally
+    if(duration > 3 and duration < 24):     #compute for exceeding
+      additional = getExceedingFee(duration-3,Car.spotSize)   # Get excess fee after 3 hours
+      Car.runningTotal = 40 + additional
+      print("Additional Rate: " + str(additional) + ". Charging for rate of: " + Car.spotSize)
+      
+    elif(duration >= 24):                   #compute for overnight fee
+      exceedFee = math.floor(duration/24)*5000
+      remainderFee = getExceedingFee(duration % 24,Car.spotSize)
+      Car.runningTotal = exceedFee + remainderFee
+
+      print("Overnight. Total: " + str(exceedFee) + " + " + str(remainderFee) + " = " + str(Car.runningTotal))
+    else:
+      Car.runningTotal = 40
+
   # Clear previous spot and spotsize for the car
   Car.spot = None
   Car.spotSize = None
-  if(Car.runningTotal > 0):
-    fee -= 40; # prevent repeating of initial 3hrs
-  print("Running Total: " + str(Car.runningTotal) + " + Fee: " + str(fee))
-  Car.runningTotal += fee
+  
   print("Pay Php" + str(Car.runningTotal) + " at the exit. Thank you!")
   return Car.runningTotal
 
@@ -215,6 +231,12 @@ def canUnPark(Car):
 
 def entranceExists(entrance):
   return(entrance < numOfEntrances and entrance >= 0)
+
+def nearest24(x):   #returns nearest multiple of 24
+  return 24 * round(x/24)
+
+def surpassed24(a,b):   # checks if from hour a to b, a 24 hour chunk was surpassed
+    return math.floor(a/24) < math.floor(b/24)
 
 #park(p1, 2, tempTime)
 #park(p2, 2, tempTime)
