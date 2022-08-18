@@ -15,8 +15,6 @@ class Car:
     self.parkedFor = parkedFor          # counts the current parking hours of the Car
 
     print("Created car with plate (" + plate + ") of size " + size)
-    print("Current Cars: ")
-    print(cars)
     # self.timeIn = None
     # self.timeOut = None
     # self.spot = None
@@ -68,34 +66,39 @@ tempTime = 1000
 
 def park(Car, entrance, time):
   print()
-  print(Car.plate + " entering from entrance " + str(entrance) + "...")
-  print("Checking previous timeout: " + str(Car.timeOut) + " VS timeIn: " + str(time))
-  if(Car.timeOut is not None):
-    print("Elapsed Duration: " + str((time - Car.timeOut).total_seconds()/3600))
+  availableSpot = locateSpot(Car.size, entrance)    #locate an available spot. If none available, don't proceed with rest
+  print()
+  if(availableSpot == -1):
+    print("No available parking spots found at this time. Please come again later.")
+    return
 
   # Check parking time in
   if(Car.timeOut is None or ((time - Car.timeOut).total_seconds()/3600 > 1)):    # First parking or time between parkings exceeds 1 hour
-    print(" - New Parking, time: " + str(time))
+    print("-------- New Parking Ticket --------")
     Car.runningTotal = 0    # reset running total, no longer continues previous parking
     Car.parkedFor = 0       # reset parking hours, start fresh
     Car.timeIn = time
   #elif((time - Car.timeOut).total_seconds()/3600 <= 60):   # Time since last timeout is less than an hour, continuous rating
   else:
-    print(" - HAS PARKED in past 1hr, prev timeIn: " + str(Car.timeIn))
+    print("-------- Continuous Rated Parking Ticket --------")
     #Car.timeOut = None      # reset timeOut, continue from last timeIn
     #Car.contRate = True      # For usage by unpark()
     Car.timeIn = time
-  availableSpot = locateSpot(Car.size, entrance)
 
   # Occupy Spot
   Car.spot = availableSpot  # set Car's spot
   available.remove(availableSpot) # remove spot from available spots
   Car.spotSize = parkingSizes[availableSpot]  # assign spotsize for later computation of fee
 
+  print("Vehicle: " + Car.plate)
+  print("Entrance: " + str(entrance))
+  print("Time In: " + str(time))
+  print("Parking Spot: " + str(availableSpot) + "(" + Car.spotSize + ")")
+
 
 
 def getExceedingFee(excessTime, size):
-  print("Excess Hours: " + str(excessTime) + "= ~" + str(math.ceil(excessTime)))
+  #print("Excess Hours: " + str(excessTime) + "= ~" + str(math.ceil(excessTime)))
   excessTime = math.ceil(excessTime)    # rounding-up method / ceiling
   fee = 0
   match size:
@@ -115,26 +118,23 @@ def getExceedingFee(excessTime, size):
 def unpark(Car, time):
   print()
   #Car.timeOut = time 
-  print(" - Unparking - ")
-  print(" time: " + str(time))
-  print(" timeOut: " + str(Car.timeOut))
-  print(" timeIn: " + str(Car.timeIn))
+  print("-------- Unparking --------")
+  print("Vehicle: " + Car.plate)
+  print("Exit time: " + str(time))
+  print("Vacating Spot: " + str(Car.spot) + "(" + Car.spotSize + ")")
+  #print("timeOut: " + str(Car.timeOut))
+  #print("timeIn: " + str(Car.timeIn))
 
-  duration = (time - Car.timeIn).total_seconds()/3600
-
-  print(Car.plate + " leaving at " + str(time) + ". Parked in " + Car.spotSize)
-  print("Parked for duration: " + str(duration) + "hrs")
-  print("New available spot: " + str(Car.spot))
-  available.insert(0,int(Car.spot))
-
+  #print("Parked for duration: " + str(duration) + "hrs")
+  #print("New available spot: " + str(Car.spot))
   fee = 0
 
   # if under continuous rated parking
   if(Car.parkedFor > 0):
-    print("CONTINUOUS PARKING")
+    print("Continuous Parking?: Yes")
     duration = (time - Car.timeOut).total_seconds()/3600    # Checking from current time to previous timeOut, since considering car at a continuous rate
     totalHrs = (Car.parkedFor + duration)
-    print(" - Current parking hours: " + str(Car.parkedFor) + " + " + str(duration) + " = " + str(totalHrs))
+    print("Current parking hours: " + str(Car.parkedFor) + " + " + str(duration) + " = " + str(totalHrs))
 
     if(totalHrs % 24 == 0):      # somehow exactly on multiple of 24
       print("Exactly " + str(totalHrs/24) + " days! = " + str(Car.runningTotal))
@@ -156,34 +156,39 @@ def unpark(Car, time):
     #return Car.runningTotal
 
   else:     #First parking, compute normally
-    print("FIRST PARKING")
+    print("Continuous Parking?: No (First Parking)")
+    duration = (time - Car.timeIn).total_seconds()/3600
+
     if(duration > 3 and duration < 24):     #compute for exceeding
       additional = getExceedingFee(duration-3,Car.spotSize)   # Get excess fee after 3 hours
       fee = 40 + additional
-      print("Additional Rate: " + str(additional) + ". Charging for rate of: " + Car.spotSize)
+      print("Excess Hours Parked: " + str(duration-3) + "= ~" + str(math.ceil(duration-3)))
+      print(" - Additional Rate: " + str(additional) + ". Charging for rate of: " + Car.spotSize)
       
     elif(duration >= 24):                   #compute for overnight fee
-      print("Overnight Fee")
       exceedFee = math.floor(duration/24)*5000
       remainderFee = getExceedingFee(duration % 24,Car.spotSize)
       fee = exceedFee + remainderFee
 
-      print("Overnight. Total: " + str(exceedFee) + " + " + str(remainderFee) + " = " + str(Car.runningTotal))
+      print("Overnight Fee: " + str(exceedFee) + " + " + str(remainderFee) + " = " + str(fee))
     else:
       fee = 40
 
     Car.parkedFor = duration
 
+  # Add spot back to available car spots
+  available.insert(0,int(Car.spot)) 
+
   # Clear previous spot and spotsize for the car
   Car.spot = None
   Car.spotSize = None
   Car.timeOut = time
-  
+
   print("Pay Php" + str(fee) + " at the exit. Thank you!")
   return fee
 
 
-
+# Checks conditions for fitting sizes
 def doesFit(size1,size2):
   if((size1 == 'L' and size2 != 'L') or (size1 == 'M' and size2 == 'S')):
     return False
@@ -195,9 +200,8 @@ def doesFit(size1,size2):
 # Locates nearest available parking spot given a car's size and the entrance used
 def locateSpot(size, entrance):
   # Shortest distance to an available spot given an entrance
-
-  #shortestDist = min([spot[entrance] for index, spot in enumerate(parkingDist) if index in available])
-  #print("Distance to nearest spot/s: " + str(shortestDist) + "m")\
+  print()
+  print("---- Locating Spot... ----")
 
   getDistances = [spot[entrance] for index, spot in enumerate(parkingDist) if index in available]   # get list of distances of parking spots to the entrance that are available
   getDistances.sort()   # sort them, since we want to find the closest
@@ -207,7 +211,7 @@ def locateSpot(size, entrance):
   print(distances)
 
   for i in distances:   # iterate over distances from the entrance
-    print("Checking spots " + str(i) + "m away from entrance " + str(entrance))
+    print("Checking spots " + str(i) + "m away from entrance " + str(entrance) + "...")
     nearestSpots = [spot for spot in available if parkingDist[spot][entrance] == i]   # get spots n distance away from the parking
     print("Nearest Spots: " + str(nearestSpots))
 
@@ -222,8 +226,7 @@ def chooseSizeSpot(nearestSpots, size):
   spotsWithSize = []
   for spot in nearestSpots:
     # If current car fits, else dont include/consider spot
-    print("Checking size...")
-    print(size + " > " + parkingSizes[spot])
+    print("Checking size... " + size + " > " + parkingSizes[spot])
     if(doesFit(size,parkingSizes[spot])):
       spotsWithSize.insert(0,(spot, parkingSizes[spot]))  #tuple, containing the spot #, and the size of that spot
 
@@ -299,8 +302,6 @@ while(True):
       currtime = str(input('Enter date(hhmm mmdd): ')).strip()
       my_date = datetime.strptime(currtime, "%H%M %m%d")
 
-      print("MY_DATE")
-      print(type(my_date))
       if(validate(plateNum) and canUnPark(cars[plateNum]) and entranceExists(entrance)):  #validation for unpark
         unpark(cars[plateNum], my_date)
       else:
