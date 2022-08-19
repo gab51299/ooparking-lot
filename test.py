@@ -60,9 +60,7 @@ for i in displayAvailable:
 
 tempTime = 1000
 
-############################# Methods #############################
-
-
+############################# Functions #############################
 
 def park(Car, entrance, time):
   print()
@@ -70,7 +68,7 @@ def park(Car, entrance, time):
   print()
   if(availableSpot == -1):
     print("No available parking spots found at this time. Please come again later.")
-    return
+    return -1
 
   # Check parking time in
   if(Car.timeOut is None or ((time - Car.timeOut).total_seconds()/3600 > 1)):    # First parking or time between parkings exceeds 1 hour
@@ -114,7 +112,6 @@ def getExceedingFee(excessTime, size):
   return fee
 
 
-
 def unpark(Car, time):
   print()
   #Car.timeOut = time 
@@ -122,15 +119,14 @@ def unpark(Car, time):
   print("Vehicle: " + Car.plate)
   print("Exit time: " + str(time))
   print("Vacating Spot: " + str(Car.spot) + "(" + Car.spotSize + ")")
-  #print("timeOut: " + str(Car.timeOut))
-  #print("timeIn: " + str(Car.timeIn))
-
-  #print("Parked for duration: " + str(duration) + "hrs")
-  #print("New available spot: " + str(Car.spot))
   fee = 0
 
   # if under continuous rated parking
   if(Car.parkedFor > 0):
+    if(time < Car.timeOut):
+      print("Invalid unpark time/date. Please try again.")
+      return -1
+
     print("Continuous Parking?: Yes")
     duration = (time - Car.timeOut).total_seconds()/3600    # Checking from current time to previous timeOut, since considering car at a continuous rate
     totalHrs = (Car.parkedFor + duration)
@@ -156,6 +152,10 @@ def unpark(Car, time):
     #return Car.runningTotal
 
   else:     #First parking, compute normally
+    if(time < Car.timeIn):
+      print("Invalid unpark time/date. Please try again.")
+      return -1
+    
     print("Continuous Parking?: No (First Parking)")
     duration = (time - Car.timeIn).total_seconds()/3600
 
@@ -241,11 +241,13 @@ def chooseSizeSpot(nearestSpots, size):
     print("Available parking spot found at #" + str(spotsWithSize[0][0]) + "!")
     return spotsWithSize[0][0]
 
+# Validation Functions
 def validate(plate):
-  return (plate in cars.keys()) # check if car exists
+  # check if car exists
+  return (plate in cars.keys())
 
 def canPark(Car):
-  # check if hasn't timed out yet, or if car already has a spot
+  # check if hasn't timed out yet, or if car already has a spot/ is parked
   return (Car.timeOut is not None or Car.spot is None or Car.spotSize is None)
 
 def canUnPark(Car):
@@ -253,8 +255,10 @@ def canUnPark(Car):
   return (Car.timeIn is not None and Car.spot is not None and Car.spotSize is not None)
 
 def entranceExists(entrance):
+  # check if entrance exists and is within proper format (int > 0)
   return(entrance < numOfEntrances and entrance >= 0)
 
+# 24-Hour Functions
 def nearest24(x):   #returns nearest multiple of 24, for computation of multiple-day parkings
   return 24 * round(x/24)
 
@@ -292,10 +296,6 @@ while(True):
       if(validate(plateNum) and canPark(cars[plateNum]) and entranceExists(entrance)):  #validation to check if car exists, and can park, and entrance exists
         park(cars[plateNum], entrance, my_date)
       else:
-        print("Invalid!")
-        print(validate(plateNum))
-        print(canPark(cars[plateNum]))
-        print(entranceExists(entrance))
         print("Error. The given car or entrance does not exist, or cannot park.")
     case "U":     # Unpark
       plateNum = input("Enter plate number: ").strip().upper()
